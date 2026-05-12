@@ -1,0 +1,17 @@
+[project]
+name = "mobile-repair-frontend"
+version = "0.1.0"
+description = "Streamlit UI for Mobile Repair API"
+authors = [
+    {name = "Your Name"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "streamlit",
+    "requests",
+    "python-dotenv",
+    "python-jose>=3.3,<4.0"
+]
+
