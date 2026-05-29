@@ -12,7 +12,8 @@ from mobile_repair_frontend.api.client import (
     create_reservation,
     get_services,
     get_users,
-    get_reservations
+    get_reservations,
+    delete_reservation
 )
 
 from mobile_repair_frontend.pages.utils.auth import (
@@ -29,33 +30,34 @@ from mobile_repair_frontend.components.sidebar import (
 # ======================
 # SIDEBAR
 # ======================
+
 render_sidebar()
 
 st.title("📅 Rezerwacje")
 
 # ======================
-# AUTH
+# AUTORYZACJA
 # ======================
+
 if not is_logged_in():
 
-    st.warning("Zaloguj się")
+    st.warning("Musisz się zalogować")
 
     st.stop()
 
 token = get_token()
 
-current_user_id = st.session_state.get(
-    "user_id"
-)
+current_user_id = get_user_id()
 
 # ======================
-# LOAD SERVICES
+# POBIERANIE USŁUG
 # ======================
+
 services_res = get_services(token)
 
 if services_res.status_code != 200:
 
-    st.error("Nie można pobrać usług")
+    st.error("Nie udało się pobrać usług")
 
     st.stop()
 
@@ -72,8 +74,10 @@ service_name_by_id = {
 }
 
 # ======================
-# LOAD USERS (ADMIN ONLY)
+# POBIERANIE UŻYTKOWNIKÓW
+# (TYLKO ADMIN / STAFF)
 # ======================
+
 user_map = {}
 
 user_email_by_id = {}
@@ -84,7 +88,7 @@ if is_staff():
 
     if users_res.status_code != 200:
 
-        st.error("Nie można pobrać użytkowników")
+        st.error("Nie udało się pobrać użytkowników")
 
         st.stop()
 
@@ -101,17 +105,19 @@ if is_staff():
     }
 
 # ======================
-# CREATE RESERVATION
+# TWORZENIE REZERWACJI
 # ======================
+
 st.subheader("➕ Utwórz rezerwację")
 
 # ======================
-# USER SELECTION
+# WYBÓR UŻYTKOWNIKA
 # ======================
+
 if is_staff():
 
     selected_user_email = st.selectbox(
-        "User",
+        "Użytkownik",
         list(user_map.keys())
     )
 
@@ -124,45 +130,49 @@ else:
     selected_user_id = get_user_id()
 
     st.info(
-        "Rezerwacja dla Twojego konta"
+        "Rezerwacja zostanie przypisana do Twojego konta"
     )
 
 # ======================
-# SERVICE SELECTION
+# WYBÓR USŁUGI
 # ======================
+
 selected_service = st.selectbox(
-    "🛠 Service",
+    "🛠 Wybierz usługę",
     list(service_map.keys())
 )
 
 # ======================
-# DATE PICKER
+# WYBÓR DATY
 # ======================
+
 selected_date = st.date_input(
-    "📅 Select date",
+    "📅 Wybierz datę",
     min_value=date.today()
 )
 
 # ======================
-# BLOCK WEEKENDS
+# BLOKADA WEEKENDÓW
 # ======================
+
 if selected_date.weekday() >= 5:
 
     st.error(
-        "Rezerwacje w weekend są niedostępne 🚫"
+        "Rezerwacje w weekendy są niedostępne 🚫"
     )
 
     st.stop()
 
 # ======================
-# LOAD EXISTING RESERVATIONS
+# POBIERANIE REZERWACJI
 # ======================
+
 reservations_res = get_reservations(token)
 
 if reservations_res.status_code != 200:
 
     st.error(
-        "Nie można pobrać rezerwacji"
+        "Nie udało się pobrać rezerwacji"
     )
 
     st.stop()
@@ -184,8 +194,9 @@ for reservation in reservations:
         )
 
 # ======================
-# GENERATE AVAILABLE SLOTS
+# GENEROWANIE DOSTĘPNYCH GODZIN
 # ======================
+
 slots = []
 
 start_time = datetime.combine(
@@ -206,10 +217,8 @@ while current_time < end_time:
 
     slot = current_time.strftime("%H:%M")
 
-    # skip occupied slots
     if slot not in existing_slots:
 
-        # skip past hours today
         if current_time > now:
 
             slots.append(slot)
@@ -219,35 +228,47 @@ while current_time < end_time:
     )
 
 # ======================
-# NO AVAILABLE SLOTS
+# BRAK TERMINÓW
 # ======================
+
 if not slots:
 
-    st.warning(
-        "Brak dostępnych terminów 😢"
-    )
+    if existing_slots:
+
+        st.error(
+            "Wszystkie terminy w tym dniu są już zajęte. Wybierz inny dzień. 📅"
+        )
+
+    else:
+
+        st.warning(
+            "Brak dostępnych terminów na wybrany dzień 😢"
+        )
 
     st.stop()
 
 # ======================
-# SLOT SELECT
+# WYBÓR GODZINY
 # ======================
+
 selected_slot = st.selectbox(
-    "🕒 Available hours",
+    "🕒 Dostępne godziny",
     slots
 )
 
 # ======================
-# CREATE DATETIME
+# TWORZENIE DATY REZERWACJI
 # ======================
+
 reservation_datetime = datetime.strptime(
     f"{selected_date} {selected_slot}",
     "%Y-%m-%d %H:%M"
 )
 
 # ======================
-# CREATE BUTTON
+# PRZYCISK TWORZENIA
 # ======================
+
 if st.button("Utwórz rezerwację"):
 
     data = {
@@ -266,63 +287,124 @@ if st.button("Utwórz rezerwację"):
     if res.status_code == 201:
 
         st.success(
-            "Dodano rezerwację ✅"
+            "Rezerwacja została utworzona ✅"
         )
 
         st.rerun()
 
+    elif res.status_code == 409:
+
+        st.error(
+            "Ten termin jest już zajęty. Wybierz inną godzinę. 🚫"
+        )
+
     else:
 
-        st.error(res.text)
+        st.error(
+            "Nie udało się utworzyć rezerwacji. Spróbuj ponownie."
+        )
 
 # ======================
-# LIST RESERVATIONS
+# LISTA REZERWACJI
 # ======================
+
 st.subheader("📋 Lista rezerwacji")
 
-if not reservations:
+# ======================
+# FILTROWANIE REZERWACJI
+# staff widzi wszystkie, użytkownik tylko swoje
+# ======================
 
-    st.info("Brak rezerwacji")
+if is_staff():
+
+    filtered_reservations = reservations
+
+    st.caption(
+        f"Wyświetlanie wszystkich rezerwacji ({len(filtered_reservations)})"
+    )
 
 else:
 
-    rows = []
+    filtered_reservations = [
+        r for r in reservations
+        if str(r["user_id"]) == str(current_user_id)
+    ]
 
-    for reservation in reservations:
+    st.caption(
+        f"Wyświetlanie Twoich rezerwacji ({len(filtered_reservations)})"
+    )
 
+# ======================
+# FILTR UŻYTKOWNIKA DLA STAFF
+# ======================
+
+if is_staff() and user_email_by_id:
+
+    filter_options = ["Wszyscy użytkownicy"] + list(user_map.keys())
+
+    selected_filter_email = st.selectbox(
+        "🔍 Filtruj po użytkowniku",
+        filter_options
+    )
+
+    if selected_filter_email != "Wszyscy użytkownicy":
+
+        filter_user_id = user_map[selected_filter_email]
+
+        filtered_reservations = [
+            r for r in filtered_reservations
+            if str(r["user_id"]) == str(filter_user_id)
+        ]
+
+# ======================
+# WYŚWIETLANIE LISTY
+# ======================
+if not filtered_reservations:
+    st.info("Brak rezerwacji do wyświetlenia")
+else:
+    for reservation in filtered_reservations:
         service_name = service_name_by_id.get(
             reservation["service_id"],
-            "Unknown Service"
+            "Nieznana usługa"
         )
-
         reservation_dt = datetime.fromisoformat(
             reservation["reservation_date"]
         )
 
-        row = {
-            "Reservation ID": reservation["id"],
-            "Service": service_name,
-            "Date": reservation_dt.strftime(
-                "%Y-%m-%d"
-            ),
-            "Time": reservation_dt.strftime(
-                "%H:%M"
-            )
-        }
+        col1, col2, col3, col4, col5 = st.columns(
+            [2, 2, 1, 2, 1]
+        )
+
+        col1.write(service_name)
+        col2.write(
+            reservation_dt.strftime("%Y-%m-%d %H:%M")
+        )
 
         if is_staff():
-
-            row["User"] = user_email_by_id.get(
+            user_label = user_email_by_id.get(
                 reservation["user_id"],
-                reservation["user_id"]
+                str(reservation["user_id"])
             )
+            col3.write(user_label)
 
-        rows.append(row)
+        col4.write(f"ID: {reservation['id']}")
 
-    df = pd.DataFrame(rows)
+        is_owner = str(reservation["user_id"]) == str(current_user_id)
 
-    st.dataframe(
-        df,
-        use_container_width=True,
-        height=400
-    )
+        if is_staff() or is_owner:
+            if col5.button(
+                "🗑️",
+                key=f"del_{reservation['id']}",
+                help="Usuń rezerwację"
+            ):
+                del_res = delete_reservation(
+                    reservation["id"],
+                    token
+                )
+                if del_res.status_code == 204:
+                    st.success("Rezerwacja usunięta ✅")
+                    st.rerun()
+                else:
+                    st.error(
+                        f"Błąd usuwania: {del_res.status_code}"
+                    )

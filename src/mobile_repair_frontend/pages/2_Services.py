@@ -1,21 +1,38 @@
 import streamlit as st
-from mobile_repair_frontend.api.client import create_service, get_service, get_services
-from mobile_repair_frontend.pages.utils.auth import get_token, is_logged_in, is_staff
+import pandas as pd
+
+from mobile_repair_frontend.api.client import (
+    create_service,
+    get_service,
+    get_services
+)
+
+from mobile_repair_frontend.pages.utils.auth import (
+    get_token,
+    is_logged_in,
+    is_staff
+)
+
 from mobile_repair_frontend.components.sidebar import render_sidebar
 
-
 render_sidebar()
-st.title("🛠 Services")
+
+st.title("🛠 Usługi")
+
+# ======================
+# AUTORYZACJA
+# ======================
 
 if not is_logged_in():
-    st.warning("Zaloguj się")
+    st.warning("Musisz się zalogować, aby zobaczyć usługi")
     st.stop()
 
 token = get_token()
 
 # ======================
-# LIST SERVICES
+# LISTA USŁUG
 # ======================
+
 st.subheader("Lista usług")
 
 services_res = get_services(token)
@@ -24,28 +41,37 @@ if services_res.status_code == 200:
     services = services_res.json()
 
     if services:
+        df = pd.DataFrame(services)
+        df = df.rename(columns={
+            "name": "Nazwa usługi",
+            "price": "Cena (PLN)",
+            "id": "ID"
+        })
         st.dataframe(
-            services,
+            df,
             use_container_width=True,
             hide_index=True
         )
     else:
-        st.info("Brak usług")
+        st.info("Brak dostępnych usług")
 else:
-    st.error("Nie można pobrać usług")
+    st.error("Nie udało się pobrać listy usług")
     st.caption(services_res.text)
 
 # ======================
-# CREATE SERVICE
+# DODAWANIE USŁUGI
 # ======================
 
 if is_staff():
-    st.subheader("Dodaj usługę")
+
+    st.subheader("Dodaj nową usługę")
 
     with st.form("create_service_form"):
+
         service_name = st.text_input("Nazwa usługi")
+
         service_price = st.number_input(
-            "Cena",
+            "Cena (PLN)",
             min_value=0,
             step=1
         )
@@ -53,9 +79,11 @@ if is_staff():
         submitted = st.form_submit_button("Dodaj usługę")
 
     if submitted:
+
         if not service_name.strip():
-            st.error("Podaj nazwę usługi")
+            st.error("Wpisz nazwę usługi")
         else:
+
             data = {
                 "name": service_name.strip(),
                 "price": int(service_price)
@@ -64,28 +92,14 @@ if is_staff():
             res = create_service(data, token)
 
             if res.status_code == 201:
-                st.success("Usługa dodana")
+                st.success("Usługa została dodana ✅")
                 st.rerun()
+
             elif res.status_code == 403:
-                st.error("Nie masz uprawnień. Usługi może dodawać admin albo employee.")
+                st.error(
+                    "Brak uprawnień. Tylko administrator lub pracownik może dodawać usługi."
+                )
+
             else:
                 st.error(res.text)
-
-# ======================
-# GET SERVICE
-# ======================
-
-if is_staff():
-
-    st.subheader("Pobierz usługę po ID")
-
-    service_id = st.text_input("Service ID")
-
-    if st.button("Pobierz"):
-        res = get_service(service_id, token)
-
-        if res.status_code == 200:
-            st.json(res.json())
-        else:
-            st.error("Nie znaleziono")
 
