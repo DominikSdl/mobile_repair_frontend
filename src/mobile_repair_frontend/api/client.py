@@ -58,3 +58,9 @@ def get_reservations(token):
         f"{API_URL}/reservations",
         headers=get_headers(token)
     )
+
+def delete_reservation(reservation_id: str, token: str):
+    return requests.delete(
+        f"{API_URL}/reservations/{reservation_id}",
+        headers=get_headers(token)
+    )

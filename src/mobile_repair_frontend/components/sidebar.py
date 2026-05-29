@@ -7,6 +7,10 @@ from mobile_repair_frontend.pages.utils.auth import (
     is_admin
 )
 
+# ======================
+# POBIERANIE NAZWY UŻYTKOWNIKA
+# ======================
+
 def get_username():
 
     token = st.session_state.get("token")
@@ -15,12 +19,21 @@ def get_username():
         return None
 
     try:
-        payload = jwt.get_unverified_claims(token)
+
+        payload = jwt.get_unverified_claims(
+            token
+        )
+
         return payload.get("sub")
 
     except Exception:
+
         return None
 
+
+# ======================
+# SIDEBAR
+# ======================
 
 def render_sidebar():
 
@@ -31,65 +44,77 @@ def render_sidebar():
         st.divider()
 
         # ======================
-        # NOT LOGGED
+        # NIEZALOGOWANY UŻYTKOWNIK
         # ======================
+
         if not is_logged_in():
 
             st.page_link(
                 "pages/1_Login.py",
-                label="🔐 Login"
+                label="🔐 Logowanie"
             )
 
             return
 
         # ======================
-        # LOGGED USER
+        # ZALOGOWANY UŻYTKOWNIK
         # ======================
+
         username = get_username()
 
-        st.success("Zalogowany")
+        st.success("Zalogowano pomyślnie ✅")
 
         if username:
-            st.caption(f"👤 {username}")
 
-        st.divider()
-
-        # ======================
-        # NAVIGATION
-        # ======================
-        st.page_link(
-            "app.py",
-            label="🏠 Home"
-        )
-
-        st.page_link(
-            "pages/2_Services.py",
-            label="🛠 Services"
-        )
-
-        st.page_link(
-            "pages/3_Reservations.py",
-            label="📅 Reservations"
-        )
-
-        # 🔐 ONLY ADMIN
-        if is_admin():
-
-            st.page_link(
-                "pages/4_Admin.py",
-                label="👑 Admin Panel"
+            st.caption(
+                f"👤 {username}"
             )
 
         st.divider()
 
         # ======================
-        # LOGOUT
+        # NAWIGACJA
         # ======================
+
+        st.page_link(
+            "app.py",
+            label="🏠 Strona główna"
+        )
+
+        st.page_link(
+            "pages/2_Services.py",
+            label="🛠 Usługi"
+        )
+
+        st.page_link(
+            "pages/3_Reservations.py",
+            label="📅 Rezerwacje"
+        )
+
+        # ======================
+        # PANEL ADMINISTRATORA
+        # ======================
+
+        if is_admin():
+
+            st.page_link(
+                "pages/4_Admin.py",
+                label="👑 Panel administratora"
+            )
+
+        st.divider()
+
+        # ======================
+        # WYLOGOWANIE
+        # ======================
+
         if st.button(
-            "🚪 Wyloguj",
+            "🚪 Wyloguj się",
             use_container_width=True
         ):
 
             logout()
 
-            st.switch_page("pages/1_Login.py")
+            st.switch_page(
+                "pages/1_Login.py"
+            )
